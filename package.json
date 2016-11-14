@@ -1,0 +1,20 @@
+{
+    "name": "overlay",
+    "description": "Responsive overlay that supports video and image galleries",
+    "version": "1.2.5",
+    "author": {
+        "name": "mtc.",
+        "email": "andrew.morgan@mtcmedia.co.uk"
+    },
+    "keywords": [
+        "browser",
+        "overlay",
+        "modal"
+    ],
+    "repository": {
+        "type": "git",
+        "url": "git@github.com:andrewmorganmtc/overlay.git"
+    },
+    "main": "./src/mtc_overlay.js",
+    "license": "MIT",
+}
