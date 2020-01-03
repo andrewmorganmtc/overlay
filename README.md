@@ -553,5 +553,3 @@ if one needs trigger ONLY overlay resize then:
 <syntaxhighlight lang="html4strict" enclose="div">
 $(window).trigger('resize.overlay');
 </syntaxhighlight>
-
-[[Category:Front End Development]]
