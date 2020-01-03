@@ -1,6 +1,6 @@
 /*!
 * mtcOverlay - A jQuery plugin for responsive overlay windows
-* Version: 1.9.1
+* Version: 1.1
 * Author: Andrew Morgan, Paul McAvoy, Aaron Spence, Valdis Ceirans
 */
 
@@ -14,62 +14,94 @@
 
     // The actual plugin constructor
     function Plugin(element, options) {
+
+        // define plugin as self
         plugin = this;
+        // p;ugin caller element
         plugin.element = element;
         plugin.$this = $(plugin.element);
+        // default settings, see wiki
         plugin.defaults = {
-            buttonHtml: '<div class="overlayCloseButton"><a href="#"><i class="fa fa-remove"></i></a></div>',
+            // use this to change the markup of the close button
+            button_html: '<div class="overlayCloseButton"><a href="#">Close <i class="fa fa-remove"></i></a></div>',
+            // add custom class to wrap so you can change padding or whatever via CSS
             content_class: '',
+            // set to true to activate gallery functionality. Don't forget to set data-rel for items
             gallery: false,
+            // gallery previous button markup. Must have js_galleryNext class.
             gallery_prev_html: '<button class="js_galleryPrev galleryPrev"><i class="fa fa-angle-left"></i></button>',
+            // gallery next button markup. Must have js_galleryNext class.
             gallery_next_html: '<button class="js_galleryNext galleryNext"><i class="fa fa-angle-right"></i></button>',
-            video: false,
+            // overlay video settings
             video_settings: {
                 autoplay: false,
                 width: 500,
                 height: 284
             },
+            // iframe dimensions
+            iframe_settings: {
+                width: 500,
+                height: 284
+            },
             fullscreen_iframe: false,
+            // vertical gap between overlay box and window
             margin_vertical: 20,
-            margin_horizontal: 20,
+            // horizontal gap between overlay box and window
+            margin_horizontal: 40,
+            // max width of the popup
             max_width: 1024,
+            // overlay fade time in ms
             fade_time: 300,
-            padding_vertical: 30,
-            padding_horizontal: 30,
+            // sets if the perfectScroll plugin will be applied for the overlay scrollbar. This only matters for ajax popups since gallery and video will always be smaller or equal to window size.
             perfect_scroll: true,
+            // this option allows to turn off perfect scroll on touch devices. Useful for the galleries with ajax content - if perfect scrollbar is used then it will absorb all the events, and swipe won't work.
             disable_perfect_scroll_on_touch: true,
+            // site outer wrapper selector(one that's ONLY direct child of body). This is used for saving and restoring the scroll position on overlay open.
             site_wrapper: '.siteWrapper',
+            // if set true allows to switch gallery with keyboard arrows
             arrow_controls: true,
+            // allows closing overlay with 'Escape' button.
             close_on_esc: true,
+            // allows changing gallery with swipe gesture on touchscreens.
             swipe: true,
+            // if set true then content from same page (when using no-ajax) will be moved into overlay instead of copying it.
+            // useful when you have forms with checkboxes and radios in popup - setting this to true solves issue with duplicate ids
+            inline: true,
+            // for opening programmatically
+            target: '',
+            no_ajax: false,
+            video: false,
+            iframe: false,
+            overlay_click_close: true,
+            image: false,
+            // responsive settings
             responsive: [
-                {
-                    breakpoint: 800,
-                    settings: {
-                        margin_vertical: 10,
-                        margin_horizontal: 10,
-                    }
-                },
                 {
                     breakpoint: 640,
                     settings: {
-                        margin_vertical: 5,
-                        margin_horizontal: 5,
+                        margin_vertical: 10,
+                        margin_horizontal: 10
                     }
                 }
             ],
             beforeOpen: function () {},
             onOpen: function () {},
-            onClose: function () {}
+            onClose: function () {},
+            afterGalleryChange: function () {},
+            beforeGalleryChange: function () {}
         };
         plugin.all_settings = $.extend(true, {}, plugin.defaults, options);
         plugin.settings = null;
         plugin._defaults = plugin.defaults;
         plugin._name = plugin_name;
+        // gallery loading flag
         plugin.gallery_loading = false;
+        // active element for gallery
         plugin.active_element = null;
+        // url variable, set later on
+        plugin.url = null,
 
-        plugin.init();
+            plugin.init();
 
     }
 
@@ -95,6 +127,7 @@
         },
 
         checkResponsive: function () {
+
             var window_width = $('.overlayBoxOuter').width();
 
             // set the default as tablet
@@ -102,7 +135,7 @@
             // iterate through settings and find the right one
             if (plugin.all_settings.responsive) {
 
-                 // loop through responsive settings
+                // loop through responsive settings
                 $.each(plugin.all_settings.responsive, function (i, value) {
                     // find one that is active
                     if (matchesMediaQuery(0, value.breakpoint)) {
@@ -146,7 +179,6 @@
             // reset all
             $('.overlayBox .overlayContent').css({
                 width: '100%',
-                height: 'auto'
             });
 
             $('.overlayBox').css({
@@ -155,17 +187,13 @@
                 left: overlay_box_left,
                 right: overlay_box_right,
                 bottom: 'auto',
-                paddingLeft: plugin.settings.padding_horizontal,
-                paddingRight: plugin.settings.padding_horizontal,
-                paddingTop: plugin.settings.padding_vertical,
-                paddingBottom: plugin.settings.padding_vertical
             });
 
             // if image then max width is either max_width or image width
             if ($('.overlayImage').length) {
-                content_width = Math.min(plugin.settings.max_width - 2 * plugin.settings.padding_horizontal, $('.overlayContentInner > img').width());
+                content_width = Math.min(plugin.settings.max_width, $('.overlayContentInner > img').width());
             } else {
-                content_width = Math.min($('.overlayBoxOuter').width() - 2 * plugin.settings.margin_horizontal, plugin.settings.max_width) - 2 * plugin.settings.padding_horizontal;
+                content_width = Math.min($('.overlayBoxOuter').width() - 2 * plugin.settings.margin_horizontal, plugin.settings.max_width);
             }
 
             // set the width to defult
@@ -191,7 +219,6 @@
             if ($('.overlayBox').outerHeight() > window_height - 2 * plugin.settings.margin_vertical || plugin.settings.fullscreen_iframe) {
 
                 $('.overlayBox').css({
-                    height: 'auto',
                     bottom: plugin.settings.margin_vertical,
                     top: plugin.settings.margin_vertical,
                     left: overlay_box_left,
@@ -208,13 +235,14 @@
 
             }
 
-            if (plugin.settings.perfect_scroll && $('.overlayBox .ps-scrollbar-y').length > 0) {
-                $('.overlayBox').perfectScrollbar('update');
+            if (plugin.settings.perfect_scroll && $('.overlayContent .ps-scrollbar-y').length > 0) {
+                $('.overlayContentInner').perfectScrollbar('update');
             }
         },
 
         imageMode: function (callback) {
-            var src = plugin.active_element.attr('href'),
+
+            var src = plugin.url,
                 image = $('<img/>');
 
 
@@ -224,10 +252,11 @@
                 $('.overlayBox .overlayImage').append(image);
                 callback();
                 plugin.resize();
+                plugin.imageUrl();
             });
 
             image.attr({
-                'src' : src
+                src: src
             });
 
             plugin.imageTitle();
@@ -236,7 +265,7 @@
         displayOverlay: function () {
 
             // add close button to overlay
-            $('.overlayBox').append($(plugin.settings.buttonHtml));
+            $('.overlayBox').append($(plugin.settings.button_html));
 
             // add any custom classes
             if (plugin.settings.content_class !== '') {
@@ -259,8 +288,8 @@
                 // provide callback functionality on open of overlay
                 plugin.settings.onOpen();
 
-                if (plugin.settings.perfect_scroll && $('.overlayBox .ps-scrollbar-y').length > 0) {
-                    $('.overlayBox').perfectScrollbar('update');
+                if (plugin.settings.perfect_scroll && $('.overlayContentInner .ps-scrollbar-y').length > 0) {
+                    $('.overlayContentInner').perfectScrollbar('update');
                 }
             });
 
@@ -283,6 +312,7 @@
         },
 
         ajaxImagesLoaded: function (callback) {
+
             var images = $('.overlayAjax img'),
                 promises = [];
 
@@ -313,12 +343,12 @@
 
             // set some vars
             var html = '',
-                data_filter = plugin.$this.attr('data-filter'),
-                url = plugin.active_element.attr('href');
+                data_filter = plugin.$this.attr('data-filter');
+
             // do ajax
             $.ajax({
                 type: 'post',
-                url: url,
+                url: plugin.url,
                 dataType: 'html',
                 success: function (response) {
 
@@ -326,11 +356,11 @@
                     if (data_filter === undefined) {
                         html = response;
                     } else {
-                        html = $(data_filter, response).wrap('<div class="overlayContainer"></div>').html();
+                        html = $(data_filter, response).html();
                     }
 
                     // add html to page
-                    $('.overlayContentInner').addClass('overlayAjax').html(html);
+                    $('.overlayContentInner').addClass('overlayAjax').html('').append('<div></div>').find('> div').html(html);
 
                     if (plugin.settings.fullscreen_iframe) {
                         $('.overlayBox').addClass('overlayFullscreen');
@@ -340,7 +370,7 @@
                         if (plugin.settings.perfect_scroll) {
                             //if not touch device and enabled on touch
                             if (!($('html').hasClass('touchevents') && plugin.settings.disable_perfect_scroll_on_touch)) {
-                                $('.overlayBox').perfectScrollbar();
+                                $('.overlayContentInner').perfectScrollbar();
                             }
                         }
 
@@ -352,6 +382,7 @@
             });
 
             plugin.imageTitle();
+
         },
 
         // function to display the box from same page
@@ -360,16 +391,28 @@
             // set some vars
             var html = '',
                 target_element,
-                url = plugin.active_element.attr('href');
+                overlay_content;
 
-            target_element = $(url);
+            // get element to display
+            target_element = $(plugin.url);
 
             if (target_element.length > 0) {
-                html = target_element.wrap('<div class="overlayContainer"></div>').html();
+                html = target_element.children();
             }
 
             // add html to page
-            $('.overlayContentInner').addClass('overlayAjax').html(html);
+            overlay_content = $('.overlayContentInner').addClass('overlayAjax').html('').append('<div></div>').find('> div');
+
+            //if inline then move content, if not copy
+            if (plugin.settings.inline) {
+                // move content from page to overlay
+                html.appendTo(overlay_content);
+
+                // mark the place where to restore the content
+                target_element.addClass('js_restoreOverlayContent');
+            } else {
+                html.clone().appendTo(overlay_content);
+            }
 
             if (plugin.settings.fullscreen_iframe) {
                 $('.overlayBox').addClass('overlayFullscreen');
@@ -381,7 +424,7 @@
                 if (plugin.settings.perfect_scroll) {
                     //if not touch device and enabled on touch
                     if (!($('html').hasClass('touchevents') && plugin.settings.disable_perfect_scroll_on_touch)) {
-                        $('.overlayBox').perfectScrollbar();
+                        $('.overlayContentInner').perfectScrollbar();
                     }
                 }
 
@@ -391,6 +434,19 @@
 
         },
 
+        // moves content back from overlay to page
+        restoreOverlayContent: function () {
+
+            var overlay_content = $('.overlayAjax > div').children(),
+                content_place = $('.js_restoreOverlayContent');
+
+            if (plugin.settings.inline && content_place.length > 0) {
+                overlay_content.appendTo(content_place);
+                content_place.removeClass('js_restoreOverlayContent');
+            }
+        },
+
+        // adds image title
         imageTitle: function () {
 
             var image_title = plugin.active_element.data('title');
@@ -412,10 +468,33 @@
 
         },
 
-        gallery: function (rel) {
+        // adds link to overlay
+        imageUrl: function () {
 
-            // set some vars
-            var gallery_images = $('[rel="' + plugin.active_element.attr('rel') + '"]');
+            var image_url = plugin.active_element.data('url'),
+                url_html = '<a class="overlayBoxLink" href="' + image_url +'" target="_blank"></a>';
+
+            $('.overlayBox').addClass('hasLink');
+
+            // add href to overlayBox if it exists
+            if (image_url !== '' && image_url !== undefined) {
+                if ($('.overlayBoxLink').length) {
+                    $('.overlayBoxLink').attr({
+                        src: image_url
+                    });
+                } else {
+                    $(url_html).insertAfter('.overlayBox .overlayImage img');
+                }
+            } else {
+                $('.overlayBoxLink').remove();
+                $('.overlayBox').removeClass('hasLink');
+            }
+
+        },
+
+        gallery: function (rel) {
+            //get all gallery elements
+            var gallery_images = $('[data-rel="' + plugin.active_element.data('rel') + '"]');
 
             // build gallery
             $('.overlayBox').addClass('hasGallery');
@@ -433,6 +512,8 @@
 
                 plugin.active_element = gallery_images.eq(active_element_nr);
 
+                plugin.url = plugin.active_element.attr('href');
+
                 // if valid index
                 if (active_element_nr < 0 || active_element_nr > gallery_images.length - 1) {
                     return void 0;
@@ -445,30 +526,37 @@
                     plugin.gallery_loading = true;
                 }
 
+                // fix the dimensions
                 $('.overlayBox .overlayContent').width($('.overlayBox .overlayContent').width());
                 $('.overlayBox .overlayContent').height($('.overlayBox .overlayContent').height());
+
+                plugin.settings.beforeGalleryChange();
 
                 // fade out existing
                 $('.overlayBox .overlayContent .overlayContentInner').fadeOut(plugin.settings.fade_time, function () {
 
                     // destroy perfect scrollbar
-                    if (plugin.settings.perfect_scroll && $('.overlayBox .ps-scrollbar-y').length > 0) {
-                        $('.overlayBox').perfectScrollbar('destroy');
+                    if (plugin.settings.perfect_scroll && $('.overlayContentInner .ps-scrollbar-y').length > 0) {
+                        $('.overlayContentInner').perfectScrollbar('destroy');
                     }
+                    // restore content back to page
+                    plugin.restoreOverlayContent();
 
-                    // fix the dimensions and remove previous content
-                    overlay_content.width(overlay_content.width());
-                    overlay_content.height(overlay_content.height());
-
+                    // remove previous content
                     overlay_content.find('.overlayContentInner').remove();
                     overlay_content.prepend('<div class="overlayContentInner"></div>');
 
                     overlay_content.addClass('overlayContentLoading');
+
                     plugin.switchGalleryMode(function () {
                         $('.overlayContentInner').hide();
                         overlay_content.removeClass('overlayContentLoading');
-                        $('.overlayContentInner').fadeIn(plugin.settings.fade_time);
+                        $('.overlayContentInner').fadeIn(plugin.settings.fade_time, function () {
+                            plugin.settings.afterGalleryChange();
+                        });
                         plugin.gallery_loading = false;
+                        //remove fixed dimensions and resize
+                        overlay_content.removeAttr('style');
                     });
 
                     plugin.galleryButtons(active_element_nr, gallery_images.length - 1);
@@ -488,9 +576,10 @@
                     } else {
                         key = 0;
                     }
-
+                    // left arrow
                     if (key === 37 && $('.overlayBox .js_galleryPrev').is(':visible')) {
                         $('.overlayBox .js_galleryPrev').trigger('click');
+                        // right arrow
                     } else if (key === 39 && $('.overlayBox .js_galleryNext').is(':visible')) {
                         $('.overlayBox .js_galleryNext').trigger('click');
                     }
@@ -502,7 +591,7 @@
                     $('.overlayBox .js_galleryNext').trigger('click');
                 });
 
-                 $('body').on('swiperight.gallery', '.overlayContent', function (e) {
+                $('body').on('swiperight.gallery', '.overlayContent', function (e) {
                     $('.overlayBox .js_galleryPrev').trigger('click');
                 });
             }
@@ -516,20 +605,22 @@
 
             // if next element is video
             if (plugin.active_element.data('video')) {
-                plugin.videoMode();
-                callback();
-            // if ajax content
+                plugin.videoMode(callback);
+            } else if (plugin.active_element.data('iframe')) {
+                plugin.iframeMode(callback);
+                // if ajax content
             } else if (plugin.active_element.data('ajax')) {
                 plugin.ajaxResponse(callback);
             } else if (plugin.active_element.data('no-ajax')) {
                 plugin.showBlock(callback);
-            // if next element is image
+                // if next element is image
             } else {
-               plugin.imageMode(callback);
+                plugin.imageMode(callback);
             }
         },
 
         galleryButtons: function (activeIndex, max) {
+
             var gallery_prev_el = $('.overlayBox .js_galleryPrev'),
                 gallery_next_el = $('.overlayBox .js_galleryNext');
 
@@ -550,63 +641,95 @@
 
         },
 
-        initVideo: function () {
+        initFrameDimensions: function () {
 
-            var iframe = $(".overlayVideo iframe"),
-                iframe_ratio = 100 * iframe.height() / iframe.width();
+            if( $(".overlayVideo iframe").length ) {
+                var element = $(".overlayVideo iframe");
+            } else if( $(".overlayVideo video").length ) {
+                var element = $(".overlayVideo video");
+            }
+
+            var element_ratio = 100 * element.attr('height') / element.attr('width');
 
             $(".overlayVideo").css({
                 height: '0',
                 width: '100%',
-                paddingTop: iframe_ratio + '%'
+                paddingTop: element_ratio + '%'
             });
 
-            iframe.css({
+            element.css({
                 width: '100%',
                 height: '100%'
             });
 
         },
 
-        videoMode: function () {
+        videoMode: function (callback) {
 
             var autoplay = '',
+                html5_video_autoplay = '',
                 videoid = '',
-                iframe_src = '',
+                src = '',
                 can_initialize = false,
-                url = plugin.active_element.attr('href');
+                rel = '?rel=0';
 
             // autoplay
             if (plugin.settings.video_settings.autoplay === true) {
                 autoplay = '?autoplay=1';
+                html5_video_autoplay = 'autoplay';
+                rel = '&rel=0';
+
             }
 
             // lets iframe in the video
-            if (url.toLowerCase().indexOf("youtu") >= 0) {
-                videoid = url.match(/(?:https?:\/{2})?(?:w{3}\.)?youtu(?:be)?\.(?:com|be)(?:\/watch\?v=|\/)([^\s&]+)/);
-                iframe_src = '<iframe src="//www.youtube.com/embed/' + videoid[1] + autoplay + '" width="' + plugin.settings.video_settings.width +'" height="' + plugin.settings.video_settings.height +'" frameborder="0" allowfullscreen></iframe>';
+            if (plugin.url.toLowerCase().indexOf("youtu") >= 0) {
+                videoid = plugin.url.match(/(?:https?:\/{2})?(?:w{3}\.)?youtu(?:be)?\.(?:com|be)(?:\/watch\?v=|\/)([^\s&]+)/);
+                src = '<iframe src="//www.youtube.com/embed/' + videoid[1] + autoplay + rel + '" width="' + plugin.settings.video_settings.width +'" height="' + plugin.settings.video_settings.height +'" frameborder="0" allowfullscreen allow="autoplay"></iframe>';
                 can_initialize = true;
-            } else if (url.toLowerCase().indexOf("vimeo") >= 0) {
-                videoid = url.match(/https?:\/\/(www\.)?vimeo.com\/(\d+)($|\/)/);
-                iframe_src = '<iframe src="//player.vimeo.com/video/' + videoid[2] + autoplay + '" width="' + plugin.settings.video_settings.width +'" height="' + plugin.settings.video_settings.height +'" frameborder="0" webkitallowfullscreen mozallowfullscreen allowfullscreen></iframe>';
+            } else if (plugin.url.toLowerCase().indexOf("vimeo") >= 0) {
+                videoid = plugin.url.match(/https?:\/\/(www\.)?vimeo.com\/(\d+)($|\/)/);
+                src = '<iframe src="//player.vimeo.com/video/' + videoid[2] + autoplay + '" width="' + plugin.settings.video_settings.width +'" height="' + plugin.settings.video_settings.height +'" frameborder="0" webkitallowfullscreen mozallowfullscreen allowfullscreen allow="autoplay"></iframe>';
+                can_initialize = true;
+            } else if (plugin.url.toLowerCase().indexOf("mp4") >= 0) {
+                src = '<video controls="" width="' + plugin.settings.video_settings.width + '" height="' + plugin.settings.video_settings.height +'" poster="' + plugin.active_element.data('poster') + '" ' + html5_video_autoplay + '>' + '<source src="' + plugin.url + '" type="video/mp4" allow="autoplay">'+ 'Your browser does not support HTML5 video.' + '</video>';
                 can_initialize = true;
             }
 
             if (can_initialize === true) {
                 $('.overlayContentInner').addClass('overlayVideo');
-                $('.overlayVideo').html(iframe_src);
+                $('.overlayVideo').html(src);
             }
 
-            plugin.initVideo();
+            plugin.initFrameDimensions();
             plugin.imageTitle();
+            callback();
+            plugin.resize();
+            
+        },
+
+        iframeMode: function (callback) {
+
+            $('.overlayContentInner').addClass('overlayVideo');
+            $('.overlayVideo').html('<iframe src="' + plugin.url + '" width="' + plugin.settings.iframe_settings.width +'" height="' + plugin.settings.iframe_settings.height + '"></iframe>');
+
+            if (plugin.settings.fullscreen_iframe) {
+                $('.overlayBox').addClass('overlayFullscreen');
+            }
+
+            plugin.initFrameDimensions();
+            plugin.imageTitle();
+            callback();
             plugin.resize();
 
         },
 
         overlayOpen: function () {
 
-            var url = plugin.$this.attr('href'),
-                rel = plugin.$this.attr('rel'),
+            var rel = plugin.$this.data('rel'),
+                show_video = plugin.$this.data('video'),
+                show_iframe = plugin.$this.data('iframe'),
+                no_ajax = plugin.$this.data('no-ajax'),
+                show_image = false,
                 extension,
                 extensions = [
                     'jpg',
@@ -614,14 +737,47 @@
                     'png',
                     'gif'
                 ],
-                scroll_on_open,
-                no_ajax = plugin.$this.attr('data-no-ajax');
+                scroll_on_open;
 
+            // set active element as caller
             plugin.active_element = plugin.$this;
 
-            extension = url.split('.').pop().toLowerCase();
+            plugin.url = plugin.$this.attr('href');
 
-            // store scroll postion
+            // if opening programmatically override url and set
+            if (plugin.settings.target.length > 0) {
+                plugin.url = plugin.settings.target;
+            }
+
+            // get extension of url/image before query string
+            extension = plugin.url.split('?')[0].split('.').pop().toLowerCase();
+
+            // if allowed image extension
+            if ($.inArray(extension, extensions) > -1) {
+                show_image = true;
+            }
+
+            // if opening programmatically
+            if (plugin.settings.target.length > 0) {
+                // if from same page
+                if (plugin.settings.no_ajax === true) {
+                    no_ajax = true
+                }
+                // if video
+                if (plugin.settings.video === true) {
+                    show_video = true
+                }
+                // if iframe
+                if (plugin.settings.iframe === true) {
+                    show_iframe = true
+                }
+                // if image
+                if (plugin.settings.image === true) {
+                    show_image = true
+                }
+            }
+
+            // store scroll position
             scroll_on_open = $('body').scrollTop() || $('html').scrollTop();
 
             $('body').data('stored-scroll', scroll_on_open);
@@ -631,8 +787,10 @@
                 top: -scroll_on_open
             });
 
+            $('body, html').scrollTop(0);
+
             // append overlay background and container to body
-            $('body').addClass('noScroll');
+            $('html').addClass('noScroll blur');
 
             $('body').append('<div class="overlayBoxOuter"><div class="overlayBox"><div class="overlayContent"><div class="overlayContentInner"></div></div></div>');
 
@@ -640,11 +798,13 @@
             $('.overlayBoxOuter').addClass('overlayLoading');
 
             // Close overlay when background is clicked
-            $('.overlayBoxOuter').on('click', function (e) {
-                if (e.target === this) {
-                    plugin.overlayClose();
-                }
-            });
+            if (plugin.settings.overlay_click_close) {
+                $('.overlayBoxOuter').on('click', function (e) {
+                    if (e.target === this) {
+                        plugin.overlayClose();
+                    }
+                });
+            }
 
             //close on escape
             if (plugin.settings.close_on_esc) {
@@ -659,7 +819,6 @@
                     } else {
                         key = 0;
                     }
-
                     if (key === 27) {
                         plugin.overlayClose();
                     }
@@ -667,20 +826,21 @@
             }
 
             // if gallery load gallery
-            if (rel && $('[rel="' + rel + '"]').length > 1 && plugin.settings.gallery === true) {
+            if (rel && $('[data-rel="' + rel + '"]').length > 1 && plugin.settings.gallery === true) {
                 plugin.gallery();
             } else {
                 // if extention is in array then we have to grab an image and not ajax
-                if ($.inArray(extension, extensions) > -1) {
+                if (show_image) {
                     plugin.imageMode(plugin.displayOverlay);
-                    // video? lets insert it
-                } else if (plugin.settings.video === true) {
-                    plugin.videoMode();
-                    plugin.displayOverlay();
-                    // do ajax
+                // video? lets insert it
+                } else if (show_video === true) {
+                    plugin.videoMode(plugin.displayOverlay);
+                // iframe mode
+                } else if (show_iframe === true) {
+                    plugin.iframeMode(plugin.displayOverlay);
                 } else {
                     // show block from same page
-                    if (typeof(no_ajax) !== "undefined") {
+                    if (no_ajax === true) {
                         plugin.showBlock(plugin.displayOverlay);
                     // or load from url
                     } else {
@@ -701,6 +861,10 @@
 
             plugin.settings.onClose();
 
+            if (plugin.settings.perfect_scroll && $('.overlayBox .ps-container').length > 0) {
+                $('.overlayContentInner').perfectScrollbar('destroy');
+            }
+
             $('body').off('click.gallery');
 
             $('body').off('swipeleft.gallery');
@@ -711,7 +875,9 @@
 
             $(document).off('keydown.overlay');
 
-            $('body').removeClass('noScroll');
+            $('html').removeClass('noScroll blur');
+
+            plugin.restoreOverlayContent();
 
             $('.overlayBoxOuter').animate({
                 opacity: 0
@@ -723,16 +889,12 @@
 
         destroy: function () {
 
-            if (plugin.settings.perfect_scroll && $('.overlayBox.ps-container').length > 0) {
-                $('.overlayBox').perfectScrollbar('destroy');
-            }
-
             // remove some elements from the DOM
             $('.overlayCloseButton').remove();
             $('.overlayBoxOuter').remove();
 
             $(plugin.settings.site_wrapper).css({
-                'top': 0
+                top: 0
             });
 
             $('body, html').scrollTop($('body').data('stored-scroll'));
@@ -757,6 +919,7 @@
 
     $.fn[plugin_name] = function (options) {
         return this.on('click', function (e) {
+
             e.preventDefault();
             var plugin, _name;
             plugin = $.data(this, 'plugin_' + plugin_name);
@@ -777,5 +940,10 @@
 
         return this;
     };
+
+    $.openMtcOverlay  = function (options) {
+        return new Plugin( $('body'), options );
+    };
+
 
 })(jQuery, window, document);
