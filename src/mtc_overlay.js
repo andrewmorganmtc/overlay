@@ -1,6 +1,6 @@
 /*!
 * mtcOverlay - A jQuery plugin for responsive overlay windows
-* Version: 1.1
+* Version: 2.0.0
 * Author: Andrew Morgan, Paul McAvoy, Aaron Spence, Valdis Ceirans
 */
 
