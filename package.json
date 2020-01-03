@@ -1,10 +1,10 @@
 {
     "name": "mtc_overlay",
     "description": "Responsive overlay that supports video and image galleries",
-    "version": "1.9.0",
+    "version": "2.0.0",
     "author": {
         "name": "mtc.",
-        "email": "andrew.morgan@mtcmedia.co.uk"
+        "email": "opensource@mtcmedia.co.uk"
     },
     "keywords": [
         "browser",
